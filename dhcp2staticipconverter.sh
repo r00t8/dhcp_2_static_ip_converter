@@ -40,5 +40,5 @@ echo "############ IP ADDRESS SUCCESSFULLY CHANGED FROM DHCP TO STATIC #########
 echo "############################# MACHINE WILL BE REBOOTED #########################"
 echo "######################## NEW IP ADDRESS IS $ip_addr ############################"
 echo "################################################################################"
-#rebooting machine
-reboot
+#restarting network service
+systemctl restart network
