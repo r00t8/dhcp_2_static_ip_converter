@@ -5,40 +5,42 @@ ip_addr=$(ip -o -4 addr list eth0 | awk '{print $4}' | cut -d/ -f1)
 ip_network=$(echo ${ip_addr%.*})
 ip_gateway=$(/sbin/ip route | awk '/default/ { print $3 }')
 ip_netmask=$(ifconfig | grep -w inet |grep -v 127.0.0.1| awk '{print $4}' | cut -d ":" -f 2)
+ip_ethernet=$(ip route get 8.8.8.8 | awk '{ print $5; exit }')
+declare -a array=(`cat /etc/resolv.conf |grep nameserver|awk -F" " '{print $2}'`)
+no_nameservers=$(cat /etc/resolv.conf |grep nameserver|awk -F" " '{print $2}' | wc -l)
+guid=$(uuidgen $ip_ethernet)
 
-#getting dhcp assigned dns servers
-I=$(wc -l /etc/resolv.conf | cut -d\/ -f1);
-N=$[I-2];
-tail -n$N /etc/resolv.conf > /etc/resolv.conf.sed
-cat /etc/resolv.conf.sed | awk '{print $2}' > /etc/resolv.conf.awk
-#creating dns lines to use in ifcfg-eth0
-counter=1
-filename=/etc/resolv.conf.awk
-while read -r line
-do
-  #printf "%010d %s" $counter $line >> /etc/resolv.conf.awk.2
-  printf "DNS%d=%s" $counter $line >> /etc/resolv.conf.awk.2
-  printf "\n" >> /etc/resolv.conf.awk.2
-  let counter=$counter+1
-done < "$filename"
-#backing up ifcfg-eth0
-cp /etc/sysconfig/network-scripts/ifcfg-eth0 /etc/sysconfig/network-scripts/ifcfg-eth0.backup
-#updating dhcp to static in ifcfg-eth
-sed -i 's/BOOTPROTO=dhcp/BOOTPROTO=static/g' /etc/sysconfig/network-scripts/ifcfg-eth0
-#updating uuid of eth0
-guid=$(uuidgen)
-sed -i '/^UUID/c\UUID='$guid'' /etc/sysconfig/network-scripts/ifcfg-eth0
-echo IPADDR=$ip_addr >> /etc/sysconfig/network-scripts/ifcfg-eth0
-echo NETMASK=$ip_netmask >> /etc/sysconfig/network-scripts/ifcfg-eth0
-echo GATEWAY=$ip_gateway >> /etc/sysconfig/network-scripts/ifcfg-eth0
-cat /etc/resolv.conf.awk.2
-cat /etc/resolv.conf.awk.2 >> /etc/sysconfig/network-scripts/ifcfg-eth0
-#deletign tmp files
-rm -rf /etc/resolv.conf.sed /etc/resolv.conf.awk /etc/resolv.conf.awk.2
-echo "################################################################################"
-echo "############ IP ADDRESS SUCCESSFULLY CHANGED FROM DHCP TO STATIC ###############"
-echo "############################# MACHINE WILL BE REBOOTED #########################"
-echo "######################## NEW IP ADDRESS IS $ip_addr ############################"
-echo "################################################################################"
-#restarting network service
-systemctl restart network
+if [ -f /etc/redhat-release ]; then
+	ethernet_file=/etc/sysconfig/network-scripts/ifcfg-$ip_ethernet
+	if [[ -f "$ethernet_file" ]]; then
+		#backing up ifcfg-eth0
+		mv -f $ethernet_file $ethernet_file.backup
+		echo TYPE=Ethernet > $ethernet_file
+		echo BOOTPROTO=static >> $ethernet_file
+		echo NAME=$ip_ethernet >> $ethernet_file
+		echo UUID=$guid >> $ethernet_file
+		echo DEVICE=$ip_ethernet >> $ethernet_file
+		echo ONBOOT=yes >> $ethernet_file
+		echo IPADDR=$ip_addr >> $ethernet_file
+		echo NETMASK=$ip_netmask >> $ethernet_file
+		echo GATEWAY=$ip_gateway >> $ethernet_file
+		
+		for (( i = 0; i < $no_nameservers; i++ )); do
+			dno=$((i+1))
+			echo DNS$dno=${array[$i]} >> $ethernet_file
+		done
+		echo "################################################################################"
+		echo "############ IP ADDRESS SUCCESSFULLY CHANGED FROM DHCP TO STATIC ###############"
+		echo "############################# MACHINE WILL BE REBOOTED #########################"
+		echo "######################## NEW IP ADDRESS IS $ip_addr ############################"
+		echo "################################################################################"
+		#restarting network service
+		systemctl restart network
+	else
+		echo "Ethernet Configuration file NOT FOUND!" && exit 0
+  	fi
+fi
+
+if [ -f /etc/lsb-release ]; then
+  echo "Support for Debian/Ubuntu Coming soon !"
+fi
