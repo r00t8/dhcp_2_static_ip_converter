@@ -3,7 +3,7 @@
 #getting ip address assigned by dhcp
 ip_addr=$(ip -o -4 addr list eth0 | awk '{print $4}' | cut -d/ -f1)
 ip_network=$(echo ${ip_addr%.*})
-ip_gateway=$ip_network.1
+ip_gateway=$(/sbin/ip route | awk '/default/ { print $3 }')
 ip_netmask=$(ifconfig | grep -w inet |grep -v 127.0.0.1| awk '{print $4}' | cut -d ":" -f 2)
 
 #getting dhcp assigned dns servers
