@@ -13,29 +13,34 @@ guid=$(uuidgen $ip_ethernet)
 if [ -f /etc/redhat-release ]; then
 	ethernet_file=/etc/sysconfig/network-scripts/ifcfg-$ip_ethernet
 	if [[ -f "$ethernet_file" ]]; then
-		#backing up ifcfg-eth0
-		mv -f $ethernet_file $ethernet_file.backup
-		echo TYPE=Ethernet > $ethernet_file
-		echo BOOTPROTO=static >> $ethernet_file
-		echo NAME=$ip_ethernet >> $ethernet_file
-		echo UUID=$guid >> $ethernet_file
-		echo DEVICE=$ip_ethernet >> $ethernet_file
-		echo ONBOOT=yes >> $ethernet_file
-		echo IPADDR=$ip_addr >> $ethernet_file
-		echo NETMASK=$ip_netmask >> $ethernet_file
-		echo GATEWAY=$ip_gateway >> $ethernet_file
-		
-		for (( i = 0; i < $no_nameservers; i++ )); do
-			dno=$((i+1))
-			echo DNS$dno=${array[$i]} >> $ethernet_file
-		done
-		echo "################################################################################"
-		echo "############ IP ADDRESS SUCCESSFULLY CHANGED FROM DHCP TO STATIC ###############"
-		echo "############################# MACHINE WILL BE REBOOTED #########################"
-		echo "######################## NEW IP ADDRESS IS $ip_addr ############################"
-		echo "################################################################################"
-		#restarting network service
-		systemctl restart network
+		dhcp_found=$(grep -q dhcp $ethernet_file && echo $?)
+		if [[ $dhcp_found -eq 0 ]]; then
+			#backing up ifcfg-eth0
+			mv -f $ethernet_file $ethernet_file.backup
+			echo TYPE=Ethernet > $ethernet_file
+			echo BOOTPROTO=static >> $ethernet_file
+			echo NAME=$ip_ethernet >> $ethernet_file
+			echo UUID=$guid >> $ethernet_file
+			echo DEVICE=$ip_ethernet >> $ethernet_file
+			echo ONBOOT=yes >> $ethernet_file
+			echo IPADDR=$ip_addr >> $ethernet_file
+			echo NETMASK=$ip_netmask >> $ethernet_file
+			echo GATEWAY=$ip_gateway >> $ethernet_file
+			
+			for (( i = 0; i < $no_nameservers; i++ )); do
+				dno=$((i+1))
+				echo DNS$dno=${array[$i]} >> $ethernet_file
+			done
+			echo "################################################################################"
+			echo "############ IP ADDRESS SUCCESSFULLY CHANGED FROM DHCP TO STATIC ###############"
+			echo "############################# MACHINE WILL BE REBOOTED #########################"
+			echo "######################## NEW IP ADDRESS IS $ip_addr ############################"
+			echo "################################################################################"
+			#restarting network service
+			systemctl restart network
+		else
+			echo "############ DHCP address not found #############"
+		fi
 	else
 		echo "Ethernet Configuration file NOT FOUND!" && exit 0
   	fi
